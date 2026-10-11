@@ -1,0 +1,29 @@
+#!/bin/sh
+
+PASS="$(tr '\0' '\n' < /proc/1/environ 2>/dev/null | sed -n 's/^LUCI_PASSWORD=//p' | head -n 1)"
+
+if [ -n "$PASS" ]; then
+	HASH="$(openssl passwd -5 "$PASS" 2>/dev/null)"
+	if [ -n "$HASH" ]; then
+		sed -i "s|^root:[^:]*:|root:${HASH}:|" /etc/shadow
+		echo "istoreos: LuCI root password applied from LUCI_PASSWORD"
+	else
+		echo "istoreos: WARNING - openssl passwd failed, password NOT set" >&2
+	fi
+fi
+
+if [ -x /etc/init.d/firewall ]; then
+	uci -q get firewall.@defaults[0].input | grep -q '^ACCEPT$' || {
+		uci -q set firewall.@defaults[0].input='ACCEPT'
+		uci -q commit firewall
+	}
+fi
+
+if [ -f /etc/config/openclash ]; then
+	uci -q get openclash.config.lan_interface_name | grep -q '^eth0$' || {
+		uci -q set openclash.config.lan_interface_name='eth0'
+		uci -q commit openclash
+	}
+fi
+
+exit 0
